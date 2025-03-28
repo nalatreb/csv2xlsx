@@ -21,6 +21,7 @@ pub fn csv2xlsx<I: Read>(input: I, options: Options) -> Result<Vec<u8>> {
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(delimiter)
         .has_headers(false)
+        .flexible(true)
         .from_reader(input);
 
     let mut workbook = Workbook::create_in_memory();
@@ -41,15 +42,15 @@ pub fn csv2xlsx<I: Read>(input: I, options: Options) -> Result<Vec<u8>> {
         for record in records.iter() {
             let mut row = Row::new();
             for (col_idx, value) in record.into_iter().enumerate() {
-                let value = String::from_utf8(strip_ansi_escapes::strip(value)?)
+                let sanitized_value = String::from_utf8(strip_ansi_escapes::strip(value)?)
                     .expect("stripping ANSI escapes from a UTF-8 string always results in UTF-8");
                 if let Ok(cell_value) = options
                     .explicit_column_types_map
-                    .to_cell_value(col_idx as u16, &value)
+                    .to_cell_value(col_idx as u16, &sanitized_value)
                 {
                     row.add_cell(cell_value);
                 } else {
-                    row.add_cell(value);
+                    row.add_cell(sanitized_value);
                 }
             }
             sheet_writer.append_row(row)?;
@@ -70,12 +71,21 @@ fn adjust_column_widths(sheet: &mut Sheet, records: &Vec<StringRecord>) -> Resul
     // + 2 is to adjust first row for autofilter icons
     let mut max_chars: Vec<usize> = record0
         .iter()
-        .map(|cell| cell.char_indices().count() + 3)
+        .map(|cell| {
+            cell.lines()
+                .map(|line| line.char_indices().count())
+                .max()
+                .unwrap_or(0) + 3
+        })
         .collect();
 
     for record in records {
         for (cell_idx, cell) in record.iter().enumerate() {
-            let char_count = cell.char_indices().count();
+            let char_count = cell.lines()
+                .map(|line| line.char_indices().count())
+                .max()
+                .unwrap_or(0);
+            
             let current_max = max_chars.get(cell_idx).unwrap_or(&0).to_owned();
             if char_count > current_max {
                 max_chars[cell_idx] = char_count;

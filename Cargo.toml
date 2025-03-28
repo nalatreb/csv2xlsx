@@ -8,6 +8,10 @@ repository = "https://github.com/jacobsvante/csv2xlsx"
 documentation = "https://docs.rs/csv2xlsx/"
 homepage = "https://github.com/jacobsvante/csv2xlsx"
 
+[profile.release]
+lto = 'fat'
+codegen-units = 1
+
 [dependencies]
 clap = { version = "3.1.18", features = ["derive"] }
 csv = "1.1.6"
